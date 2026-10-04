@@ -82,7 +82,6 @@ class ProfilePage extends StatelessWidget {
                               runSpacing: 7,
                               children: [
                                 Tag(me.level, color: Colors.white, bg: Colors.white.withValues(alpha: 0.14)),
-                                Tag(me.sport, color: Colors.white, bg: Colors.white.withValues(alpha: 0.14), icon: Icons.sports_tennis),
                                 Tag(me.city, color: Colors.white, bg: Colors.white.withValues(alpha: 0.14), icon: Icons.place_outlined),
                                 if (me.isGoogle)
                                   Tag('Google', color: Colors.white, bg: Colors.white.withValues(alpha: 0.14), icon: Icons.verified_rounded),
@@ -122,6 +121,27 @@ class ProfilePage extends StatelessWidget {
                               padding: const EdgeInsets.only(left: 16),
                               child: StatTile(value: '$wins', label: 'Menang', color: AppColors.greenDark),
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SectionCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('OLAHRAGA FAVORIT', style: T.caps),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final sp in me.sports)
+                                Tag(sp,
+                                    icon: AppState.sportIcon(sp),
+                                    color: AppColors.blue,
+                                    bg: AppColors.blueSoft),
+                            ],
                           ),
                         ],
                       ),
@@ -271,7 +291,8 @@ class ProfilePage extends StatelessWidget {
     final phone = TextEditingController(text: me.phone);
     var level = me.level;
     var city = me.city;
-    var sport = me.sport;
+    final sports = <String>[...me.sports];
+    String? sportHint;
 
     showAppSheet(
       context,
@@ -298,14 +319,45 @@ class ProfilePage extends StatelessWidget {
                 onChanged: (v) => setSheet(() => level = v),
               ),
               const SizedBox(height: 16),
-              Text('Olahraga', style: T.caps.copyWith(color: AppColors.ink70)),
-              const SizedBox(height: 9),
-              ChoiceRow<Sport>(
-                options: AppState.sports,
-                value: AppState.sports.firstWhere((s) => s.name == sport),
-                labelOf: (s) => s.name,
-                onChanged: (s) => setSheet(() => sport = s.name),
+              Row(
+                children: [
+                  Text('Olahraga Favorit', style: T.caps.copyWith(color: AppColors.ink70)),
+                  const Spacer(),
+                  Text('${sports.length}/${AppState.maxFavoriteSports} dipilih', style: T.small),
+                ],
               ),
+              const SizedBox(height: 9),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final sp in AppState.sports)
+                    _sportChip(
+                      sp.name,
+                      sports.contains(sp.name),
+                      () => setSheet(() {
+                        if (sports.contains(sp.name)) {
+                          if (sports.length == 1) {
+                            sportHint = 'Pilih minimal 1 olahraga favorit.';
+                          } else {
+                            sports.remove(sp.name);
+                            sportHint = null;
+                          }
+                        } else if (sports.length >= AppState.maxFavoriteSports) {
+                          sportHint = 'Maksimal ${AppState.maxFavoriteSports} olahraga favorit.';
+                        } else {
+                          sports.add(sp.name);
+                          sportHint = null;
+                        }
+                      }),
+                    ),
+                ],
+              ),
+              if (sportHint != null) ...[
+                const SizedBox(height: 8),
+                Text(sportHint!,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.red)),
+              ],
               const SizedBox(height: 16),
               Text('Kota', style: T.caps.copyWith(color: AppColors.ink70)),
               const SizedBox(height: 9),
@@ -323,7 +375,7 @@ class ProfilePage extends StatelessWidget {
                     name: name.text,
                     level: level,
                     userCity: city,
-                    userSport: sport,
+                    userSports: sports,
                     bio: bio.text,
                     phone: phone.text,
                   );
@@ -334,6 +386,33 @@ class ProfilePage extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _sportChip(String label, bool on, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: on ? AppColors.ink : Colors.white,
+          borderRadius: R.pill,
+          border: Border.all(color: on ? AppColors.ink : AppColors.hairline),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (on) ...[
+              const Icon(Icons.check_rounded, size: 15, color: Colors.white),
+              const SizedBox(width: 5),
+            ],
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700, color: on ? Colors.white : AppColors.ink70)),
+          ],
         ),
       ),
     );

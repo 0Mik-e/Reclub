@@ -130,8 +130,6 @@ const _navItems = [
 ];
 
 class _RootShellState extends State<RootShell> {
-  int _index = 0;
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -141,7 +139,7 @@ class _RootShellState extends State<RootShell> {
         return Scaffold(
           backgroundColor: AppColors.canvas,
           body: IndexedStack(
-            index: _index,
+            index: appState.shellIndex,
             children: [
               const DiscoverPage(),
               const ClubPage(),
@@ -166,11 +164,11 @@ class _RootShellState extends State<RootShell> {
                       Expanded(
                         child: _NavButton(
                           item: _navItems[i],
-                          selected: i == _index,
+                          selected: i == appState.shellIndex,
                           badge: i == 4 && unread > 0 ? unread : 0,
                           onTap: () {
                             HapticFeedback.selectionClick();
-                            setState(() => _index = i);
+                            appState.goToTab(i);
                           },
                         ),
                       ),

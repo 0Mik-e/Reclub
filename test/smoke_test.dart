@@ -29,6 +29,9 @@ void main() {
     await AppDb.instance.reset();
     appState.stage = BootStage.loading;
     appState.me = null;
+    appState.authDelayOverride = Duration.zero; // lewati animasi loading 3-5 detik
+    appState.shellIndex = 0;
+    appState.competeSeason = 4;
   });
 
   group('database', () {
@@ -158,6 +161,57 @@ void main() {
       expect(appState.meets.length, before + 1);
       expect(m.joined, isTrue);
       expect(appState.myMeets.map((x) => x.id), contains(m.id));
+    });
+  });
+
+  group('fitur baru', () {
+    test('chat ke akun sendiri ditolak, ke teman lain membuat thread', () async {
+      await appState.signIn('demo@reclub.id', 'reclub123');
+      final self = appState.friends.firstWhere(appState.isSelf);
+      expect(await appState.openDirectThread(self), isNull);
+      final other = appState.friends.firstWhere((p) => !appState.isSelf(p));
+      final id = await appState.openDirectThread(other);
+      expect(id, isNotNull);
+      expect(appState.threads.any((t) => t.id == id && t.kind == 'dm'), isTrue);
+    });
+
+    test('olahraga favorit maksimal 3', () async {
+      await appState.signIn('demo@reclub.id', 'reclub123');
+      Future<String?> save(List<String> s) => appState.updateProfile(
+            name: 'User',
+            level: 'Advanced',
+            userCity: 'Jakarta',
+            userSports: s,
+            bio: '',
+            phone: '',
+          );
+      expect(await save(['Pickleball', 'Padel', 'Futsal', 'Basket']), isNotNull);
+      expect(await save([]), isNotNull);
+      expect(await save(['Pickleball', 'Padel', 'Futsal']), isNull);
+      expect(appState.me!.sports, ['Pickleball', 'Padel', 'Futsal']);
+    });
+
+    test('pendaftaran tim VFFL Season 5 tersimpan', () async {
+      await appState.signIn('demo@reclub.id', 'reclub123');
+      expect(appState.registrationFor(5), isNull);
+      final err = await appState.registerCompTeam(
+        season: 5,
+        teamName: 'Bandung Smashers',
+        memberNames: ['User', 'Rina Ayu', 'Dimas Putra', 'Kyle Adhi'],
+        method: 'QRIS',
+      );
+      expect(err, isNull);
+      expect(appState.registrationFor(5)!.teamName, 'Bandung Smashers');
+      // Pendaftaran kedua di musim yang sama ditolak.
+      expect(
+        await appState.registerCompTeam(
+          season: 5,
+          teamName: 'Tim Lain',
+          memberNames: ['User', 'A', 'B', 'C'],
+          method: 'QRIS',
+        ),
+        isNotNull,
+      );
     });
   });
 

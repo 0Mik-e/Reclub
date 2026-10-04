@@ -1,8 +1,11 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'db.dart';
 import 'models.dart';
+import 'vffl.dart';
 
 enum BootStage { loading, onboarding, auth, ready }
 
@@ -15,6 +18,35 @@ class AppState extends ChangeNotifier {
   BootStage stage = BootStage.loading;
   User? me;
   bool get signedIn => me != null;
+
+  // ---- Navigasi ----------------------------------------------------------
+  /// Tab aktif di bottom navigation (0 Discover, 1 Klub, 2 Meet, 3 Compete, 4 Chat).
+  int shellIndex = 0;
+
+  /// Musim VFFL yang sedang dibuka di halaman Compete (3, 4, atau 5).
+  int competeSeason = 4;
+
+  /// Lama animasi loading saat masuk/daftar. `null` = acak 3-5 detik.
+  /// Tes mengisinya dengan `Duration.zero`.
+  Duration? authDelayOverride;
+  final Random _rng = Random();
+
+  void goToTab(int i) {
+    shellIndex = i;
+    notifyListeners();
+  }
+
+  void setCompeteSeason(int season) {
+    competeSeason = season;
+    notifyListeners();
+  }
+
+  /// Membuka halaman Compete langsung pada musim [season].
+  void openCompetition(int season) {
+    competeSeason = season;
+    shellIndex = 3;
+    notifyListeners();
+  }
 
   // ---- Discover filters --------------------------------------------------
   String city = 'Jakarta';
@@ -35,6 +67,11 @@ class AppState extends ChangeNotifier {
     Sport('Tenis', Icons.sports_baseball),
   ];
   static const levels = ['Beginner', 'Intermediate', 'Advanced'];
+  static const maxFavoriteSports = 3;
+  static const selfChatMessage = 'Anda tidak dapat mengirim pesan ke diri anda sendiri';
+
+  static IconData sportIcon(String name) =>
+      sports.firstWhere((s) => s.name == name, orElse: () => sports.first).icon;
   static const tags = ['Semua', 'Social', 'Training', 'Comp'];
 
   DateTime get today {
@@ -55,6 +92,7 @@ class AppState extends ChangeNotifier {
   final List<BracketSlot> bracket = [];
   final List<ChatThread> threads = [];
   final List<ChatMessage> chat = [];
+  final List<CompRegistration> registrations = [];
 
   Club club = const Club(
     id: 'c-usc',
@@ -96,7 +134,7 @@ class AppState extends ChangeNotifier {
     }
     if (me != null) {
       city = me!.city;
-      sport = sports.firstWhere((s) => s.name == me!.sport, orElse: () => sports.first);
+      sport = sports.firstWhere((s) => s.name == me!.primarySport, orElse: () => sports.first);
       await _hydrate();
       stage = BootStage.ready;
     } else {
@@ -120,8 +158,27 @@ class AppState extends ChangeNotifier {
   }
 
   // ---- Auth --------------------------------------------------------------
+  /// Menjalankan [body] sambil menampilkan animasi loading 3-5 detik. Halaman
+  /// baru (stage `ready`) baru dibuka setelah animasi selesai; kalau gagal,
+  /// pesan error langsung dikembalikan tanpa menunggu.
+  Future<String?> _authFlow(Future<String?> Function() body) async {
+    final delay = authDelayOverride ?? Duration(milliseconds: 3000 + _rng.nextInt(2001));
+    final wait = Future<void>.delayed(delay);
+    final err = await body();
+    if (err != null) return err;
+    await wait;
+    shellIndex = 0;
+    competeSeason = 4;
+    stage = BootStage.ready;
+    notifyListeners();
+    return null;
+  }
+
   /// Returns null on success, or a human-readable error message.
-  Future<String?> signIn(String email, String password) async {
+  Future<String?> signIn(String email, String password) =>
+      _authFlow(() => _signInRaw(email, password));
+
+  Future<String?> _signInRaw(String email, String password) async {
     final e = email.trim().toLowerCase();
     if (e.isEmpty) return 'Email belum diisi.';
     if (password.isEmpty) return 'Password belum diisi.';
@@ -138,10 +195,11 @@ class AppState extends ChangeNotifier {
   Future<void> _startSession(Map<String, Object?> row) async {
     me = User.fromMap(row);
     city = me!.city;
-    sport = sports.firstWhere((s) => s.name == me!.sport, orElse: () => sports.first);
+    sport = sports.firstWhere((s) => s.name == me!.primarySport, orElse: () => sports.first);
     await _setMeta('user_id', me!.id);
     await _hydrate();
-    stage = BootStage.ready;
+    // `stage` sengaja tidak diubah di sini: [_authFlow] yang membukanya
+    // setelah animasi loading selesai.
     notifyListeners();
   }
 
@@ -182,7 +240,10 @@ class AppState extends ChangeNotifier {
 
   /// Signs in with a Google account. Existing emails reuse their account, new
   /// ones get a `google` account created on the spot (no password to type).
-  Future<String?> signInWithGoogle({required String name, required String email}) async {
+  Future<String?> signInWithGoogle({required String name, required String email}) =>
+      _authFlow(() => _googleRaw(name: name, email: email));
+
+  Future<String?> _googleRaw({required String name, required String email}) async {
     final e = email.trim().toLowerCase();
     if (name.trim().length < 2) return 'Nama Google tidak valid.';
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(e)) return 'Format email tidak valid.';
@@ -204,7 +265,9 @@ class AppState extends ChangeNotifier {
 
   /// Browses without an account. The guest is a real row in SQLite, so
   /// everything a guest does is still saved and can be upgraded later.
-  Future<String?> continueAsGuest() async {
+  Future<String?> continueAsGuest() => _authFlow(_guestRaw);
+
+  Future<String?> _guestRaw() async {
     const email = 'tamu@reclub.local';
     final existing = await _userByEmail(email);
     if (existing != null) {
@@ -262,6 +325,23 @@ class AppState extends ChangeNotifier {
     required String level,
     required String userCity,
     required String userSport,
+  }) =>
+      _authFlow(() => _signUpRaw(
+            name: name,
+            email: email,
+            password: password,
+            level: level,
+            userCity: userCity,
+            userSport: userSport,
+          ));
+
+  Future<String?> _signUpRaw({
+    required String name,
+    required String email,
+    required String password,
+    required String level,
+    required String userCity,
+    required String userSport,
   }) async {
     final e = email.trim().toLowerCase();
     if (name.trim().length < 2) return 'Nama minimal 2 karakter.';
@@ -278,13 +358,15 @@ class AppState extends ChangeNotifier {
       userCity: userCity,
       userSport: userSport,
     );
-    return signIn(e, password);
+    return _signInRaw(e, password);
   }
 
   Future<void> signOut() async {
     await _db.delete('app_meta', where: 'k = ?', whereArgs: ['user_id']);
     me = null;
     _clear();
+    shellIndex = 0;
+    competeSeason = 4;
     stage = BootStage.auth;
     notifyListeners();
   }
@@ -293,12 +375,17 @@ class AppState extends ChangeNotifier {
     required String name,
     required String level,
     required String userCity,
-    required String userSport,
+    required List<String> userSports,
     required String bio,
     required String phone,
   }) async {
     if (me == null) return 'Belum masuk.';
     if (name.trim().length < 2) return 'Nama minimal 2 karakter.';
+    if (userSports.isEmpty) return 'Pilih minimal 1 olahraga favorit.';
+    if (userSports.length > maxFavoriteSports) {
+      return 'Olahraga favorit maksimal $maxFavoriteSports.';
+    }
+    final userSport = userSports.join(',');
     await _db.update(
       'users',
       {
@@ -320,7 +407,7 @@ class AppState extends ChangeNotifier {
       ..bio = bio.trim()
       ..phone = phone.trim();
     city = userCity;
-    sport = sports.firstWhere((s) => s.name == userSport, orElse: () => sports.first);
+    sport = sports.firstWhere((s) => s.name == userSports.first, orElse: () => sports.first);
     notifyListeners();
     return null;
   }
@@ -347,12 +434,14 @@ class AppState extends ChangeNotifier {
     await AppDb.instance.reset();
     me = null;
     _clear();
+    shellIndex = 0;
+    competeSeason = 4;
     stage = BootStage.onboarding;
     notifyListeners();
   }
 
   void _clear() {
-    for (final l in [meets, activities, posts, members, matches, compTeams, poolMatches, bracket, threads, chat]) {
+    for (final l in [meets, activities, posts, members, matches, compTeams, poolMatches, bracket, threads, chat, registrations]) {
       l.clear();
     }
   }
@@ -416,6 +505,10 @@ class AppState extends ChangeNotifier {
     }
     for (final r in await _db.query('threads', orderBy: 'ord')) {
       threads.add(ChatThread.fromMap(r));
+    }
+    for (final r in await _db.query('comp_registrations',
+        where: 'owner_id = ?', whereArgs: [meId], orderBy: 'created_at')) {
+      registrations.add(CompRegistration.fromMap(r));
     }
     await _loadMessages();
   }
@@ -531,31 +624,99 @@ class AppState extends ChangeNotifier {
       });
   }
 
-  List<Map<String, dynamic>> poolTable(String pool) {
-    final rows = <String, Map<String, dynamic>>{};
-    for (final t in compTeams.where((t) => t.pool == pool)) {
-      rows[t.name] = {'code': t.code, 'name': t.name, 'pts': 0, 'diff': 0, 'w': 0, 'l': 0};
-    }
-    for (final m in poolMatches.where((m) => m.pool == pool)) {
-      final a = rows[m.a], b = rows[m.b];
-      if (a == null || b == null) continue;
-      a['diff'] += m.scoreA - m.scoreB;
-      b['diff'] += m.scoreB - m.scoreA;
-      if (m.scoreA > m.scoreB) {
-        a['pts'] += 3;
-        a['w'] += 1;
-        b['l'] += 1;
-      } else {
-        b['pts'] += 3;
-        b['w'] += 1;
-        a['l'] += 1;
+  List<Map<String, dynamic>> poolTable(String pool) => poolTableOf(compTeams, poolMatches, pool);
+
+  // ---- Teman (halaman sosial) --------------------------------------------
+  /// Apakah [p] adalah akun yang sedang masuk.
+  bool isSelf(Player p) {
+    final u = me;
+    if (u == null) return false;
+    return p.id == u.id || p.name.trim().toLowerCase() == u.name.trim().toLowerCase();
+  }
+
+  Player? get _selfPlayer {
+    final u = me;
+    if (u == null) return null;
+    return Player(id: u.id, name: u.name, level: u.level, sports: u.sports, bio: u.bio);
+  }
+
+  /// Daftar teman untuk tab TEMAN. Data akun sendiri selalu diambil dari profil
+  /// terbaru, dan akun sendiri ditaruh di daftar walau belum ada di roster.
+  List<Player> get friends {
+    final self = _selfPlayer;
+    final out = [for (final p in members) isSelf(p) && self != null ? self : p];
+    if (self != null && !members.any(isSelf)) out.insert(0, self);
+    return out;
+  }
+
+  /// Membuka (atau membuat) obrolan pribadi dengan [p]. Mengembalikan id thread,
+  /// atau `null` bila [p] adalah akun sendiri.
+  Future<String?> openDirectThread(Player p) async {
+    if (me == null || isSelf(p)) return null;
+    ChatThread? t;
+    for (final x in threads) {
+      if (x.kind == 'dm' && x.name == p.name) {
+        t = x;
+        break;
       }
     }
-    return rows.values.toList()
-      ..sort((x, y) {
-        final p = (y['pts'] as int).compareTo(x['pts'] as int);
-        return p != 0 ? p : (y['diff'] as int).compareTo(x['diff'] as int);
-      });
+    if (t == null) {
+      t = ChatThread(id: 'dm-${p.id}', name: p.name, subtitle: 'Pesan langsung', kind: 'dm');
+      threads.add(t);
+      await _db.insert(
+        'threads',
+        {'id': t.id, 'name': t.name, 'subtitle': t.subtitle, 'kind': 'dm', 'unread': 0, 'ord': threads.length + 10},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await openThread(t.id);
+    return t.id;
+  }
+
+  // ---- Pendaftaran kompetisi ---------------------------------------------
+  CompRegistration? registrationFor(int season) {
+    for (final r in registrations) {
+      if (r.season == season) return r;
+    }
+    return null;
+  }
+
+  /// Mendaftarkan tim ke musim [season]. [memberNames] berisi 4 nama, kapten
+  /// (akun ini) di urutan pertama.
+  Future<String?> registerCompTeam({
+    required int season,
+    required String teamName,
+    required List<String> memberNames,
+    required String method,
+  }) async {
+    final u = me;
+    if (u == null) return 'Belum masuk.';
+    if (registrationFor(season) != null) return 'Tim kamu sudah terdaftar di musim ini.';
+    final name = teamName.trim();
+    if (name.length < 3) return 'Nama tim minimal 3 karakter.';
+    if (memberNames.length != 4) return 'Tim harus terdiri dari 4 pemain.';
+    final reg = CompRegistration(
+      id: 'reg-${DateTime.now().microsecondsSinceEpoch}',
+      season: season,
+      teamName: name,
+      members: memberNames,
+      method: method,
+      createdAt: DateTime.now(),
+    );
+    await _db.insert('comp_registrations', {
+      'id': reg.id,
+      'season': season,
+      'owner_id': u.id,
+      'team_name': name,
+      'members': memberNames.join('|'),
+      'method': method,
+      'created_at': reg.createdAt.toIso8601String(),
+    });
+    registrations.add(reg);
+    competeSeason = season;
+    shellIndex = 3;
+    notifyListeners();
+    return null;
   }
 
   // ---- Filters (no persistence needed) -----------------------------------

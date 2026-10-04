@@ -98,7 +98,7 @@ class _MeetPageState extends State<MeetPage> {
                 bg: Colors.white.withValues(alpha: 0.28),
                 fg: joined ? Colors.white : AppColors.ink,
                 border: false,
-                onTap: () => toast(context, 'Link meet disalin', icon: Icons.link_rounded),
+                onTap: () => toast(context, 'Tautan disalin', icon: Icons.link_rounded),
               ),
             ],
           ),
@@ -301,7 +301,7 @@ class _MeetPageState extends State<MeetPage> {
             Text('${list.length} peserta terdaftar', style: T.caps),
             const Spacer(),
             GestureDetector(
-              onTap: () => toast(context, 'Link undangan disalin', icon: Icons.link_rounded),
+              onTap: () => toast(context, 'Tautan disalin', icon: Icons.link_rounded),
               child: const Tag('Undang', color: AppColors.blue, bg: AppColors.blueSoft, icon: Icons.person_add_alt),
             ),
           ],
@@ -353,10 +353,10 @@ class _MeetPageState extends State<MeetPage> {
   }
 
   static Color _teamColor(String team) => switch (team) {
-        'Red' => AppColors.red,
-        'Blue' => AppColors.blue,
-        'Yellow' => AppColors.yellowDeep,
-        'Green' => AppColors.green,
+        'Merah' => AppColors.red,
+        'Biru' => AppColors.blue,
+        'Kuning' => AppColors.yellowDeep,
+        'Hijau' => AppColors.green,
         _ => AppColors.muted,
       };
 

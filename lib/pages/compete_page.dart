@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
+import '../data/vffl.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'chat_page.dart';
+import 'vffl_register_page.dart';
 
 class CompetePage extends StatefulWidget {
   const CompetePage({super.key});
@@ -17,50 +19,122 @@ class _CompetePageState extends State<CompetePage> {
   int _tab = 3;
   int _result = 1;
   String _pool = 'A';
+  int _shownSeason = 4;
 
-  static const _tabs = ['DETAIL', 'PESERTA', 'MATCH', 'HASIL', 'DISKUSI'];
+  // ------------------------------------------------------ data per musim
+  int get _season => appState.competeSeason;
+  SeasonMeta get _meta => Vffl.meta(_season);
+  bool get _isLive => _meta.status == SeasonStatus.live;
+  bool get _isEnded => _meta.status == SeasonStatus.ended;
+  bool get _isUpcoming => _meta.status == SeasonStatus.upcoming;
+  
+  List<String> get _tabs => _isUpcoming
+      ? const ['DETAIL', 'PESERTA', 'MATCH', 'HASIL']
+      : const ['DETAIL', 'PESERTA', 'MATCH', 'HASIL', 'DISKUSI'];
+
+  List<CompTeam> get _teams => switch (_season) {
+        3 => Vffl.s3Teams,
+        5 => <CompTeam>[],
+        _ => appState.compTeams,
+      };
+  List<PoolMatch> get _poolMatches => switch (_season) {
+        3 => Vffl.s3PoolMatches,
+        5 => <PoolMatch>[],
+        _ => appState.poolMatches,
+      };
+  List<BracketSlot> get _bracket => switch (_season) {
+        3 => Vffl.s3Bracket,
+        5 => <BracketSlot>[],
+        _ => appState.bracket,
+      };
+  List<Map<String, dynamic>> _poolTable(String p) => poolTableOf(_teams, _poolMatches, p);
+
+  /// Ganti musim -> kembalikan tab/filter ke posisi awal musim itu.
+  void _syncSeason() {
+    if (_shownSeason == _season) return;
+    _shownSeason = _season;
+    _tab = _isUpcoming ? 0 : 3;
+    _result = 1;
+    _pool = 'A';
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: appState,
-      builder: (context, _) => Scaffold(
-        backgroundColor: AppColors.canvas,
-        body: Column(
-          children: [
-            _hero(context),
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  UnderlineTabs(
-                    items: _tabs,
-                    index: _tab,
-                    onChanged: (i) => setState(() => _tab = i),
-                  ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.hairline),
-                ],
+      builder: (context, _) {
+        _syncSeason();
+        final tabs = _tabs;
+        if (_tab >= tabs.length) _tab = 0;
+        return Scaffold(
+          backgroundColor: AppColors.canvas,
+          body: Column(
+            children: [
+              _hero(context),
+              Container(
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                      child: PillSwitch(
+                        items: const ['Season 3', 'Season 4', 'Season 5'],
+                        index: (_season - 3).clamp(0, 2),
+                        onChanged: (i) => appState.setCompeteSeason(i + 3),
+                      ),
+                    ),
+                    UnderlineTabs(
+                      items: tabs,
+                      index: _tab,
+                      onChanged: (i) => setState(() => _tab = i),
+                    ),
+                    const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: switch (_tab) {
-                0 => _details(context),
-                1 => _participants(context),
-                2 => _matches(context),
-                3 => _results(context),
-                _ => const ChatPage(embedded: true, threadId: 't2'),
-              },
-            ),
-          ],
-        ),
-      ),
+              Expanded(
+                child: switch (_tab) {
+                  0 => _details(context),
+                  1 => _participants(context),
+                  2 => _matches(context),
+                  3 => _results(context),
+                  _ => _discussion(context),
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   // ------------------------------------------------------------------- hero
   Widget _hero(BuildContext context) {
+    final m = _meta;
+    final (tagText, tagBg, tagFg) = switch (m.status) {
+      SeasonStatus.live => ('LIVE', AppColors.yellow, AppColors.ink),
+      SeasonStatus.ended => ('TELAH BERAKHIR', const Color(0xFFDADDE3), AppColors.ink70),
+      SeasonStatus.upcoming => ('AKAN DATANG', Colors.white, AppColors.greenDark),
+    };
+    final gradient = switch (m.status) {
+      SeasonStatus.live => AppColors.inkGradient,
+      SeasonStatus.ended => const LinearGradient(
+          colors: [Color(0xFF8A90A0), Color(0xFF5F6575)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      SeasonStatus.upcoming => AppColors.greenGradient,
+    };
+    final teams = _teams.length;
+    final subtitle = switch (m.status) {
+      SeasonStatus.live => 'Playoffs · $teams tim · ${teams * 4} pemain',
+      SeasonStatus.ended => 'Selesai · $teams tim · ${teams * 4} pemain',
+      SeasonStatus.upcoming => '${m.city} · pendaftaran tim dibuka',
+    };
+    final reg = appState.registrationFor(_season);
+
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.inkGradient),
+      decoration: BoxDecoration(gradient: gradient),
       padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 10, 16, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,13 +143,18 @@ class _CompetePageState extends State<CompetePage> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: AppColors.yellow, borderRadius: R.pill),
-                child: const Text('LIVE',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: AppColors.ink)),
+                decoration: BoxDecoration(color: tagBg, borderRadius: R.pill),
+                child: Text(tagText,
+                    style: TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: tagFg)),
               ),
               const SizedBox(width: 8),
-              Text('KOMPETISI · ${appState.city.toUpperCase()}',
-                  style: T.caps.copyWith(color: Colors.white54)),
+              Flexible(
+                child: Text('KOMPETISI · ${m.city.toUpperCase()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: T.caps.copyWith(color: Colors.white70)),
+              ),
               const Spacer(),
               CircleIconButton(
                 icon: Icons.ios_share_rounded,
@@ -83,38 +162,49 @@ class _CompetePageState extends State<CompetePage> {
                 bg: Colors.white.withValues(alpha: 0.14),
                 fg: Colors.white,
                 border: false,
-                onTap: () => toast(context, 'Link kompetisi disalin', icon: Icons.link_rounded),
+                onTap: () => toast(context, 'Tautan disalin', icon: Icons.link_rounded),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          const Text('VFFL SEASON 4',
-              style: TextStyle(
+          Text(m.title,
+              style: const TextStyle(
                   fontSize: 28, height: 1.05, fontWeight: FontWeight.w900, letterSpacing: -0.8, color: Colors.white)),
           const SizedBox(height: 6),
-          Text('Playoffs · 9 tim · ${appState.compTeams.length * 4} pemain',
-              style: T.small.copyWith(color: Colors.white70)),
+          Text(subtitle, style: T.small.copyWith(color: Colors.white70)),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _heroStat('${appState.poolMatches.length}', 'MATCH')),
+              Expanded(child: _heroStat('${_poolMatches.length}', 'MATCH')),
               _heroDivider(),
-              Expanded(child: _heroStat('${appState.bracket.length}', 'PLAYOFF')),
+              Expanded(child: _heroStat('${_bracket.length}', 'PLAYOFF')),
               _heroDivider(),
-              Expanded(child: _heroStat('2', 'GRUP')),
+              Expanded(child: _heroStat(_isUpcoming ? '—' : '2', 'GRUP')),
               const SizedBox(width: 10),
-              GestureDetector(
-                onTap: () => setState(() {
-                  _tab = 3;
-                  _result = 2;
-                }),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(color: AppColors.yellow, borderRadius: R.pill),
-                  child: const Text('Lihat bagan',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.ink)),
+              if (_isUpcoming)
+                GestureDetector(
+                  onTap: reg != null ? null : () => _openRegistration(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: R.pill),
+                    child: Text(reg != null ? 'Terdaftar ✓' : 'Daftarkan tim',
+                        style: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.greenDark)),
+                  ),
+                )
+              else
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _tab = 3;
+                    _result = 2;
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(color: AppColors.yellow, borderRadius: R.pill),
+                    child: const Text('Lihat bagan',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  ),
                 ),
-              ),
             ],
           ),
         ],
@@ -129,7 +219,7 @@ class _CompetePageState extends State<CompetePage> {
           Text(l,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Colors.white38)),
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Colors.white54)),
         ],
       );
 
@@ -142,20 +232,22 @@ class _CompetePageState extends State<CompetePage> {
 
   // ---------------------------------------------------------------- details
   Widget _details(BuildContext context) {
+    final m = _meta;
+    final reg = appState.registrationFor(_season);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
+        if (reg != null) ...[
+          _registeredBanner(reg),
+          const SizedBox(height: 14),
+        ],
         SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('TENTANG TURNAMEN', style: T.caps),
               const SizedBox(height: 10),
-              const Text(
-                'VFFL Season 4 mempertemukan 9 tim dari klub-klub Jakarta. Babak pool dimainkan '
-                'dengan sistem setengah kompetisi, dua tim teratas tiap pool lolos ke semifinal.',
-                style: T.body,
-              ),
+              Text(m.about, style: T.body),
             ],
           ),
         ),
@@ -163,15 +255,15 @@ class _CompetePageState extends State<CompetePage> {
         SectionCard(
           child: Column(
             children: [
-              _row(Icons.event_rounded, 'Jadwal', '12 – 20 Okt 2026'),
+              _row(Icons.event_rounded, 'Jadwal', m.schedule),
               const Divider(height: 22, color: AppColors.hairline),
-              _row(Icons.place_outlined, 'Venue', 'GBK Arena, Gelora'),
+              _row(Icons.place_outlined, 'Venue', m.venue),
               const Divider(height: 22, color: AppColors.hairline),
               _row(Icons.groups_rounded, 'Format', 'Pool + Playoff'),
               const Divider(height: 22, color: AppColors.hairline),
-              _row(Icons.payments_outlined, 'Biaya tim', 'Rp750k'),
+              _row(Icons.payments_outlined, 'Biaya tim', m.feeLabel),
               const Divider(height: 22, color: AppColors.hairline),
-              _row(Icons.emoji_events_outlined, 'Hadiah', 'Rp10jt + trofi'),
+              _row(Icons.emoji_events_outlined, 'Hadiah', m.prize),
             ],
           ),
         ),
@@ -190,12 +282,7 @@ class _CompetePageState extends State<CompetePage> {
                 ],
               ),
               const SizedBox(height: 10),
-              for (final r in const [
-                'Game sampai 21 poin, menang selisih 2.',
-                'Menang pool = 3 poin, kalah = 0.',
-                'Seri poin diputus oleh selisih poin.',
-                'Tim wajib hadir 15 menit sebelum jadwal.',
-              ])
+              for (final r in m.rules)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 7),
                   child: Row(
@@ -210,13 +297,91 @@ class _CompetePageState extends State<CompetePage> {
           ),
         ),
         const SizedBox(height: 14),
-        PrimaryButton(
-          label: 'Daftarkan tim',
-          icon: Icons.add_rounded,
-          onTap: () => toast(context, 'Pendaftaran tim dibuka lagi Season 5', icon: Icons.info_outline_rounded),
-        ),
+        if (_isLive)
+          PrimaryButton(
+            label: 'Daftarkan tim',
+            icon: Icons.add_rounded,
+            onTap: () => appState.setCompeteSeason(5),
+          )
+        else if (_isEnded)
+          const PrimaryButton(label: 'Pendaftaran ditutup', kind: BtnKind.outline)
+        else if (reg == null)
+          PrimaryButton(
+            label: 'Daftarkan tim',
+            icon: Icons.add_rounded,
+            onTap: () => _openRegistration(context),
+          )
+        else
+          const PrimaryButton(label: 'Tim sudah terdaftar', kind: BtnKind.soft, icon: Icons.check_rounded),
       ],
     );
+  }
+
+  void _openRegistration(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => VfflRegisterPage(season: _season)),
+    );
+  }
+
+  /// Kartu "tim anda telah terdaftar" lengkap dengan nama tim dan peserta.
+  Widget _registeredBanner(CompRegistration reg) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.greenSoft,
+        borderRadius: R.lg,
+        border: Border.all(color: AppColors.green.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle),
+                child: const Icon(Icons.check_rounded, size: 20, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Tim Anda telah terdaftar pada turnamen ini',
+                    style: TextStyle(
+                        fontSize: 14.5, height: 1.3, fontWeight: FontWeight.w800, color: AppColors.greenDark)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text('NAMA TIM', style: T.caps.copyWith(color: AppColors.greenDark)),
+          const SizedBox(height: 4),
+          Text(reg.teamName, style: T.h2),
+          const SizedBox(height: 14),
+          Text('PESERTA', style: T.caps.copyWith(color: AppColors.greenDark)),
+          const SizedBox(height: 8),
+          for (final (i, name) in reg.members.indexed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Avatar(label: name, size: 30),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(name, style: T.bodyStrong)),
+                  if (i == 0)
+                    const Tag('Kapten', dense: true, color: AppColors.greenDark, bg: Colors.white),
+                ],
+              ),
+            ),
+          const SizedBox(height: 2),
+          Text('Pembayaran via ${reg.method} · ${_dateLabel(reg.createdAt)}', style: T.small),
+        ],
+      ),
+    );
+  }
+
+  static String _dateLabel(DateTime d) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
   static Widget _row(IconData icon, String label, String value) => Row(
@@ -231,8 +396,9 @@ class _CompetePageState extends State<CompetePage> {
 
   // ----------------------------------------------------------- participants
   Widget _participants(BuildContext context) {
+    if (_isUpcoming) return _hiddenParticipants();
     final pools = <String, List<CompTeam>>{};
-    for (final t in appState.compTeams) {
+    for (final t in _teams) {
       pools.putIfAbsent(t.pool, () => []).add(t);
     }
     return ListView(
@@ -275,8 +441,99 @@ class _CompetePageState extends State<CompetePage> {
     );
   }
 
+  Widget _hiddenParticipants() {
+    final reg = appState.registrationFor(_season);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        if (reg != null) ...[
+          Text('TIM KAMU', style: T.caps.copyWith(color: AppColors.ink)),
+          const SizedBox(height: 10),
+          SectionCard(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Avatar(label: reg.teamName, size: 42, square: true, bold: true),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(reg.teamName, style: T.title)),
+                    const Tag('TERDAFTAR', dense: true, color: AppColors.greenDark, bg: AppColors.greenSoft),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(reg.members.join(' · '), style: T.small),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        SectionCard(
+          child: EmptyState(
+            icon: Icons.visibility_off_outlined,
+            title: 'Peserta disembunyikan',
+            subtitle: 'Daftar peserta ${_meta.title} ditampilkan setelah pendaftaran ditutup.',
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ------------------------------------------------------------- discussion
+  Widget _discussion(BuildContext context) {
+    if (_season == 4) return const ChatPage(embedded: true, threadId: 't2');
+    // Season 3: diskusi lama yang sudah diarsipkan (hanya baca).
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: AppColors.chip, borderRadius: R.md),
+          child: Row(
+            children: [
+              const Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.muted),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Diskusi diarsipkan · hanya bisa dibaca', style: T.small)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final (author, text) in _meta.archive)
+          SectionCard(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Avatar(label: author, size: 34),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(author, style: T.bodyStrong),
+                      const SizedBox(height: 3),
+                      Text(text, style: T.body),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   // ---------------------------------------------------------------- matches
   Widget _matches(BuildContext context) {
+    if (_isUpcoming) {
+      return const EmptyState(
+        icon: Icons.sports_tennis_rounded,
+        title: 'Match belum tersedia',
+        subtitle: 'Jadwal match diumumkan setelah pendaftaran ditutup.',
+      );
+    }
     return Column(
       children: [
         _poolSwitch(),
@@ -284,11 +541,15 @@ class _CompetePageState extends State<CompetePage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
             children: [
-              for (final m in appState.poolMatches.where((m) => m.pool == _pool))
+              for (final m in _poolMatches.where((m) => m.pool == _pool))
                 _poolMatchCard(context, m),
               const SizedBox(height: 8),
-              Text('Ketuk kartu untuk mengubah skor. Klasemen pool ikut ter-update.',
-                  textAlign: TextAlign.center, style: T.small),
+              Text(
+                  _isLive
+                      ? 'Ketuk kartu untuk mengubah skor. Klasemen pool ikut ter-update.'
+                      : 'Riwayat pertandingan ${_meta.title}. Skor tidak dapat diubah.',
+                  textAlign: TextAlign.center,
+                  style: T.small),
             ],
           ),
         ),
@@ -297,7 +558,7 @@ class _CompetePageState extends State<CompetePage> {
   }
 
   Widget _poolSwitch() {
-    final pools = appState.compTeams.map((t) => t.pool).toSet().toList()..sort();
+    final pools = _teams.map((t) => t.pool).toSet().toList()..sort();
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -312,7 +573,10 @@ class _CompetePageState extends State<CompetePage> {
   Widget _poolMatchCard(BuildContext context, PoolMatch m) {
     final aWin = m.scoreA > m.scoreB;
     return GestureDetector(
-      onTap: () => _editPoolScore(context, m),
+      onTap: () => _isLive
+          ? _editPoolScore(context, m)
+          : toast(context, 'Kompetisi telah berakhir, skor tidak bisa diubah',
+              icon: Icons.lock_outline_rounded),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -424,6 +688,13 @@ class _CompetePageState extends State<CompetePage> {
 
   // ---------------------------------------------------------------- results
   Widget _results(BuildContext context) {
+    if (_isUpcoming) {
+      return const EmptyState(
+        icon: Icons.emoji_events_outlined,
+        title: 'Hasil belum tersedia',
+        subtitle: 'Hasil pertandingan muncul setelah turnamen dimulai.',
+      );
+    }
     return Column(
       children: [
         Container(
@@ -449,8 +720,8 @@ class _CompetePageState extends State<CompetePage> {
   }
 
   Widget _awards(BuildContext context) {
-    final finals = appState.bracket.where((b) => b.stage == 'FINALS').toList();
-    final third = appState.bracket.where((b) => b.stage == 'THIRD PLACE').toList();
+    final finals = _bracket.where((b) => b.stage == 'FINALS').toList();
+    final third = _bracket.where((b) => b.stage == 'THIRD PLACE').toList();
     final champ = finals.isEmpty ? '—' : (finals.first.aWins ? finals.first.teamA : finals.first.teamB);
     final runner = finals.isEmpty ? '—' : (finals.first.aWins ? finals.first.teamB : finals.first.teamA);
     final bronze = third.isEmpty ? '—' : (third.first.aWins ? third.first.teamA : third.first.teamB);
@@ -464,7 +735,7 @@ class _CompetePageState extends State<CompetePage> {
             children: [
               const Icon(Icons.emoji_events_rounded, size: 42, color: AppColors.ink),
               const SizedBox(height: 10),
-              Text('JUARA VFFL SEASON 4', style: T.caps.copyWith(color: AppColors.ink70)),
+              Text('JUARA ${_meta.title}', style: T.caps.copyWith(color: AppColors.ink70)),
               const SizedBox(height: 6),
               Text(champ,
                   textAlign: TextAlign.center,
@@ -483,12 +754,7 @@ class _CompetePageState extends State<CompetePage> {
         const SizedBox(height: 18),
         Text('MVP & PENGHARGAAN', style: T.caps),
         const SizedBox(height: 10),
-        for (final a in const [
-          ['MVP Turnamen', 'User', Icons.star_rounded],
-          ['Top Scorer', 'Rina Ayu', Icons.local_fire_department_rounded],
-          ['Best Defense', 'Bayu Pratama', Icons.shield_rounded],
-          ['Fair Play', 'Sunrise Smash', Icons.handshake_rounded],
-        ])
+        for (final a in _meta.awards)
           SectionCard(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(12),
@@ -498,16 +764,16 @@ class _CompetePageState extends State<CompetePage> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(color: AppColors.yellowSoft, borderRadius: R.md),
-                  child: Icon(a[2] as IconData, size: 19, color: AppColors.yellowDeep),
+                  child: Icon(a.icon, size: 19, color: AppColors.yellowDeep),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(a[0] as String, style: T.small),
+                      Text(a.title, style: T.small),
                       const SizedBox(height: 2),
-                      Text(a[1] as String, style: T.title),
+                      Text(a.name, style: T.title),
                     ],
                   ),
                 ),
@@ -537,7 +803,7 @@ class _CompetePageState extends State<CompetePage> {
       );
 
   Widget _pools(BuildContext context) {
-    final pools = appState.compTeams.map((t) => t.pool).toSet().toList()..sort();
+    final pools = _teams.map((t) => t.pool).toSet().toList()..sort();
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
@@ -564,7 +830,7 @@ class _CompetePageState extends State<CompetePage> {
                     ],
                   ),
                 ),
-                for (final (i, row) in appState.poolTable(p).indexed)
+                for (final (i, row) in _poolTable(p).indexed)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
@@ -619,7 +885,7 @@ class _CompetePageState extends State<CompetePage> {
 
   Widget _playoffs(BuildContext context) {
     final stages = <String, List<BracketSlot>>{};
-    for (final b in appState.bracket) {
+    for (final b in _bracket) {
       stages.putIfAbsent(b.stage, () => []).add(b);
     }
     return ListView(
@@ -691,11 +957,11 @@ class _CompetePageState extends State<CompetePage> {
   }
 
   Widget _stats(BuildContext context) {
-    final played = appState.poolMatches.length;
-    final points = appState.poolMatches.fold<int>(0, (s, m) => s + m.scoreA + m.scoreB);
-    final biggest = appState.poolMatches.isEmpty
+    final played = _poolMatches.length;
+    final points = _poolMatches.fold<int>(0, (s, m) => s + m.scoreA + m.scoreB);
+    final biggest = _poolMatches.isEmpty
         ? null
-        : appState.poolMatches.reduce((a, b) =>
+        : _poolMatches.reduce((a, b) =>
             (a.scoreA - a.scoreB).abs() >= (b.scoreA - b.scoreB).abs() ? a : b);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -772,10 +1038,10 @@ class _CompetePageState extends State<CompetePage> {
   }
 
   List<Map<String, dynamic>> _allTeamRows() {
-    final pools = appState.compTeams.map((t) => t.pool).toSet().toList()..sort();
+    final pools = _teams.map((t) => t.pool).toSet().toList()..sort();
     final rows = <Map<String, dynamic>>[];
     for (final p in pools) {
-      rows.addAll(appState.poolTable(p));
+      rows.addAll(_poolTable(p));
     }
     rows.sort((a, b) => (b['pts'] as int).compareTo(a['pts'] as int));
     return rows;
