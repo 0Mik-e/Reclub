@@ -17,6 +17,9 @@ void main() {
     await AppDb.instance.reset();
     appState.me = null;
     appState.stage = BootStage.loading;
+    appState.authDelayOverride = Duration.zero; // lewati animasi loading 3-5 detik
+    appState.shellIndex = 0;
+    appState.competeSeason = 4;
   });
 
   Future<void> boot(WidgetTester tester) async {
@@ -37,7 +40,7 @@ void main() {
   }
 
   final pages = <String, List<String>>{
-    'Discover': ['KLUB', 'KOMPETISI', 'VENUE', 'ORANG', 'MEET'],
+    'Discover': ['KLUB', 'KOMPETISI', 'VENUE', 'TEMAN', 'MEET'],
     'Klub': ['AKTIVITAS', 'ANGGOTA', 'TENTANG', 'BERANDA'],
     'Meet': ['PESERTA', 'MATCH', 'DETAIL'],
     'Compete': ['DETAIL', 'PESERTA', 'MATCH', 'HASIL'],

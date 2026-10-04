@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
+import '../widgets/auth_loading.dart';
 import '../widgets/common.dart';
 import '../widgets/logo.dart';
 
@@ -148,6 +149,17 @@ class _AuthPageState extends State<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _form(context),
+        // Animasi loading selama proses masuk / daftar / tamu (3-5 detik).
+        if (_busy) const Positioned.fill(child: AuthLoadingOverlay()),
+      ],
+    );
+  }
+
+  Widget _form(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(

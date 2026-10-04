@@ -34,6 +34,12 @@ class User {
   /// How the account was created: `password`, `google`, or `guest`.
   final String provider;
 
+  /// Olahraga favorit (maksimal 3). Disimpan di kolom `sport` dipisah koma,
+  /// jadi tidak perlu migrasi skema untuk tabel `users`.
+  List<String> get sports =>
+      sport.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  String get primarySport => sports.isEmpty ? 'Pickleball' : sports.first;
+
   bool get isGuest => provider == 'guest';
   bool get isGoogle => provider == 'google';
 
@@ -54,11 +60,20 @@ class User {
 }
 
 class Player {
-  Player({required this.id, required this.name, required this.level, this.team});
+  Player({
+    required this.id,
+    required this.name,
+    required this.level,
+    this.team,
+    this.sports = const [],
+    this.bio = '',
+  });
   final String id;
   final String name;
   final String level; // Beginner / Intermediate / Advanced
-  final String? team; // Red / Blue / Yellow / Green
+  final String? team; // Merah / Biru / Kuning / Hijau
+  final List<String> sports; // olahraga favorit
+  final String bio; // deskripsi profil
 
   String get initials => _initialsOf(name);
 
@@ -67,6 +82,39 @@ class Player {
         name: m['name'] as String,
         level: m['level'] as String,
         team: m['team'] as String?,
+        sports: ((m['sports'] as String?) ?? '')
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
+        bio: (m['bio'] as String?) ?? '',
+      );
+}
+
+/// Tim yang didaftarkan pengguna ke sebuah musim kompetisi (mis. VFFL Season 5).
+class CompRegistration {
+  CompRegistration({
+    required this.id,
+    required this.season,
+    required this.teamName,
+    required this.members,
+    required this.method,
+    required this.createdAt,
+  });
+  final String id;
+  final int season;
+  final String teamName;
+  final List<String> members; // kapten di urutan pertama
+  final String method; // Google Play / QRIS
+  final DateTime createdAt;
+
+  factory CompRegistration.fromMap(Map<String, Object?> m) => CompRegistration(
+        id: m['id'] as String,
+        season: m['season'] as int,
+        teamName: m['team_name'] as String,
+        members: (m['members'] as String).split('|'),
+        method: m['method'] as String,
+        createdAt: DateTime.parse(m['created_at'] as String),
       );
 }
 

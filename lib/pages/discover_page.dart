@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
+import '../data/vffl.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'chat_page.dart';
 import 'meet_page.dart';
 import 'profile_page.dart';
 
@@ -64,7 +66,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 Container(
                   color: Colors.white,
                   child: UnderlineTabs(
-                    items: const ['KLUB', 'MEET', 'KOMPETISI', 'VENUE', 'ORANG'],
+                    items: const ['KLUB', 'MEET', 'KOMPETISI', 'VENUE', 'TEMAN'],
                     index: s.discoverTab,
                     onChanged: s.setDiscoverTab,
                     accent: AppColors.blue,
@@ -513,57 +515,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        SectionCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  gradient: AppColors.inkGradient,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Tag('SEDANG BERLANGSUNG',
-                              color: AppColors.ink, bg: AppColors.yellow, dense: true),
-                          const SizedBox(height: 9),
-                          const Text('VFFL SEASON 4',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
-                          const SizedBox(height: 4),
-                          Text('${appState.compTeams.length} tim · 2 pool · playoff',
-                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white60)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.emoji_events_rounded, size: 40, color: AppColors.yellow),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Expanded(child: StatTile(value: '${appState.poolMatches.length}', label: 'Match pool')),
-                    Expanded(child: StatTile(value: '${appState.bracket.length}', label: 'Match playoff')),
-                    Expanded(
-                        child: StatTile(
-                            value: appState.poolTable('A').first['name'] as String,
-                            label: 'Puncak pool A',
-                            color: AppColors.greenDark)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
+        // Urutan: Season 4 (berlangsung), Season 3 (riwayat), Season 5 (akan datang).
+        for (final n in const [4, 3, 5]) ...[
+          _seasonCard(context, n),
+          const SizedBox(height: 14),
+        ],
+        const SizedBox(height: 2),
+        const SectionHeader('Klasemen VFFL Season 4'),
         for (final p in pools) ...[
-          SectionHeader('Pool $p'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 2),
+            child: Text('POOL $p', style: T.caps.copyWith(color: AppColors.ink)),
+          ),
           SectionCard(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
@@ -599,6 +562,127 @@ class _DiscoverPageState extends State<DiscoverPage> {
           const SizedBox(height: 16),
         ],
       ],
+    );
+  }
+
+  /// Kartu satu musim VFFL. Menekan kartu langsung membuka tab Compete pada
+  /// musim tersebut.
+  Widget _seasonCard(BuildContext context, int season) {
+    final m = Vffl.meta(season);
+    final registered = appState.registrationFor(season) != null;
+
+    final (tagText, tagBg, tagFg, gradient, trophy) = switch (m.status) {
+      SeasonStatus.live => (
+          'SEDANG BERLANGSUNG',
+          AppColors.yellow,
+          AppColors.ink,
+          AppColors.inkGradient,
+          AppColors.yellow,
+        ),
+      SeasonStatus.ended => (
+          'TELAH BERAKHIR',
+          const Color(0xFFDADDE3),
+          AppColors.ink70,
+          const LinearGradient(
+            colors: [Color(0xFF9CA2AE), Color(0xFF6F7583)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          Colors.white70,
+        ),
+      SeasonStatus.upcoming => (
+          'AKAN DATANG',
+          Colors.white,
+          AppColors.greenDark,
+          AppColors.greenGradient,
+          Colors.white,
+        ),
+    };
+
+    final String subtitle;
+    final List<Widget> stats;
+    switch (season) {
+      case 3:
+        subtitle = '${Vffl.s3Teams.length} tim · 2 pool · playoff';
+        stats = [
+          Expanded(child: StatTile(value: '${Vffl.s3PoolMatches.length}', label: 'Match pool')),
+          Expanded(child: StatTile(value: '${Vffl.s3Bracket.length}', label: 'Match playoff')),
+          Expanded(child: StatTile(value: Vffl.s3Champion, label: 'Juara', color: AppColors.muted)),
+        ];
+      case 5:
+        subtitle = '${m.city} · pendaftaran dibuka';
+        stats = [
+          Expanded(child: StatTile(value: m.city, label: 'Lokasi')),
+          Expanded(child: StatTile(value: m.feeLabel, label: 'Biaya tim')),
+          Expanded(
+              child: StatTile(
+                  value: registered ? 'Terdaftar' : 'Dibuka',
+                  label: 'Pendaftaran',
+                  color: AppColors.greenDark)),
+        ];
+      default:
+        subtitle = '${appState.compTeams.length} tim · 2 pool · playoff';
+        stats = [
+          Expanded(child: StatTile(value: '${appState.poolMatches.length}', label: 'Match pool')),
+          Expanded(child: StatTile(value: '${appState.bracket.length}', label: 'Match playoff')),
+          Expanded(
+              child: StatTile(
+                  value: appState.poolTable('A').first['name'] as String,
+                  label: 'Puncak pool A',
+                  color: AppColors.greenDark)),
+        ];
+    }
+
+    return GestureDetector(
+      onTap: () => appState.openCompetition(season),
+      child: SectionCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            Tag(tagText, color: tagFg, bg: tagBg, dense: true),
+                            if (registered)
+                              const Tag('TIM KAMU TERDAFTAR',
+                                  color: Colors.white, bg: Color(0x33FFFFFF), dense: true),
+                          ],
+                        ),
+                        const SizedBox(height: 9),
+                        Text(m.title,
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
+                        const SizedBox(height: 4),
+                        Text(subtitle,
+                            style: const TextStyle(
+                                fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.emoji_events_rounded, size: 40, color: trophy),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: stats),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -701,10 +785,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
   // ----------------------------------------------------------------- people
   Widget _peopleTab(BuildContext context, AppState s) {
     final q = s.query.trim().toLowerCase();
-    final list = s.members.where((p) => q.isEmpty || p.name.toLowerCase().contains(q)).toList();
+    final list = s.friends.where((p) => q.isEmpty || p.name.toLowerCase().contains(q)).toList();
     if (list.isEmpty) {
       return const EmptyState(
-          icon: Icons.person_search_rounded, title: 'Tidak ada orang', subtitle: 'Coba kata kunci lain.');
+          icon: Icons.person_search_rounded, title: 'Tidak ada teman', subtitle: 'Coba kata kunci lain.');
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -712,11 +796,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final p = list[i];
+        final self = s.isSelf(p);
         return Reveal(
           delayMs: i * 25,
           child: SectionCard(
             padding: const EdgeInsets.all(12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Avatar(label: p.name, size: 42),
                 const SizedBox(width: 12),
@@ -724,30 +810,88 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.title),
-                      const SizedBox(height: 3),
                       Row(
                         children: [
-                          Tag(p.level, dense: true),
-                          if (p.team != null) ...[
+                          Flexible(
+                            child: Text(p.name,
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: T.title),
+                          ),
+                          if (self) ...[
                             const SizedBox(width: 6),
-                            Tag('Tim ${p.team}', dense: true, color: AppColors.blue, bg: AppColors.blueSoft),
+                            const Tag('Kamu',
+                                dense: true, color: AppColors.greenDark, bg: AppColors.greenSoft),
                           ],
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Tag(p.level, dense: true),
+                      if (p.sports.isNotEmpty) ...[
+                        const SizedBox(height: 9),
+                        Text('OLAHRAGA FAVORIT', style: T.caps.copyWith(fontSize: 9.5)),
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final sp in p.sports)
+                              Tag(sp,
+                                  dense: true,
+                                  icon: AppState.sportIcon(sp),
+                                  color: AppColors.blue,
+                                  bg: AppColors.blueSoft),
+                          ],
+                        ),
+                      ],
+                      if (p.bio.isNotEmpty) ...[
+                        const SizedBox(height: 9),
+                        Text(p.bio,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: T.small.copyWith(fontWeight: FontWeight.w500, height: 1.4)),
+                      ],
                     ],
                   ),
                 ),
-                CircleIconButton(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  size: 34,
-                  onTap: () => toast(context, 'Undangan chat dikirim ke ${p.name}'),
-                ),
+                const SizedBox(width: 8),
+                _chatButton(context, p),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Tombol chat langsung: tidak perlu mengirim undangan dulu.
+  Widget _chatButton(BuildContext context, Player p) {
+    return GestureDetector(
+      onTap: () => _chatWith(context, p),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: AppColors.ink, borderRadius: R.pill),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.chat_bubble_rounded, size: 14, color: Colors.white),
+            SizedBox(width: 6),
+            Text('Chat',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _chatWith(BuildContext context, Player p) async {
+    if (appState.isSelf(p)) {
+      toast(context, AppState.selfChatMessage, icon: Icons.block_rounded);
+      return;
+    }
+    final id = await appState.openDirectThread(p);
+    if (id == null || !context.mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => Conversation(threadId: id)),
     );
   }
 

@@ -25,15 +25,19 @@ class AppDb {
     final path = p.join(dir, fileName);
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
       onCreate: (d, _) async {
         await _createSchema(d);
         await _seed(d);
       },
-      // The seed is demo content, so an upgrade simply rebuilds it instead of
-      // migrating row by row.
-      onUpgrade: (d, _, _) async {
+      // v3 -> v4 only adds columns/tables, so existing accounts are kept.
+      // Older versions are demo content and are simply rebuilt from the seed.
+      onUpgrade: (d, oldVersion, _) async {
+        if (oldVersion == 3) {
+          await _migrate3to4(d);
+          return;
+        }
         await _dropSchema(d);
         await _createSchema(d);
         await _seed(d);
@@ -52,6 +56,48 @@ class AppDb {
     await deleteDatabase(path);
     await open();
   }
+
+  static const _registrationsSql = '''
+      CREATE TABLE comp_registrations (
+        id TEXT PRIMARY KEY, season INTEGER NOT NULL, owner_id TEXT NOT NULL,
+        team_name TEXT NOT NULL, members TEXT NOT NULL, method TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )''';
+
+  static Future<void> _migrate3to4(Database d) async {
+    await d.execute("ALTER TABLE players ADD COLUMN sports TEXT NOT NULL DEFAULT ''");
+    await d.execute("ALTER TABLE players ADD COLUMN bio TEXT NOT NULL DEFAULT ''");
+    await d.execute(_registrationsSql);
+    final b = d.batch();
+    _playerProfiles.forEach((id, p) {
+      b.update('players', {'sports': p[0], 'bio': p[1]}, where: 'id = ?', whereArgs: [id]);
+    });
+    const teamNames = {'Red': 'Merah', 'Blue': 'Biru', 'Yellow': 'Kuning', 'Green': 'Hijau'};
+    teamNames.forEach((en, id) {
+      b.update('players', {'team': id}, where: 'team = ?', whereArgs: [en]);
+    });
+    b.update('app_meta', {'v': '4'}, where: "k = 'seed_version'");
+    await b.commit(noResult: true);
+  }
+
+  static const _playerProfiles = <String, List<String>>{
+    'u0': ['Pickleball,Padel', 'Main hampir tiap sore. DUPR 4.1, suka americano & round robin.'],
+    'u1': ['Pickleball,Futsal', 'Suka main ganda, santai tapi serius soal skor. Biasa ikut sesi sore.'],
+    'u2': ['Pickleball,Tenis', 'Pelatih clinic akhir pekan. Senang bantu pemula naik level.'],
+    'u3': ['Pickleball', 'Baru enam bulan main, lagi semangat-semangatnya cari lawan sparing.'],
+    'u4': ['Pickleball,Padel,Tenis', 'Anak sunrise session. Favorit: dink rally panjang sebelum berangkat kerja.'],
+    'u5': ['Padel,Pickleball', 'Main agresif di depan net. Cari partner ganda untuk turnamen.'],
+    'u6': ['Futsal,Pickleball', 'Mantan pemain futsal kampus, sekarang jatuh cinta sama pickleball.'],
+    'u7': ['Pickleball,Basket', 'Pemula yang rajin latihan servis. Terbuka buat diajak main kapan saja.'],
+    'u8': ['Pickleball,Padel', 'Suka kompetisi dan liga klub. Biasa main malam di akhir pekan.'],
+    'u9': ['Tenis,Pickleball', 'Pindah dari tenis, masih adaptasi sama gaya main yang lebih cepat.'],
+    'u10': ['Basket,Futsal', 'Main buat keringetan dan seru-seruan. Ajak teman, makin ramai makin asik.'],
+    'u11': ['Pickleball,Padel', 'Fokus ke strategi dan konsistensi. Senang analisis pertandingan bareng.'],
+    'u12': ['Pickleball', 'Lagi belajar dasar-dasarnya. Ramah, suka ngobrol di sela-sela game.'],
+    'u13': ['Padel,Tenis', 'Main padel tiap Kamis. Cari lawan seimbang untuk latihan ganda.'],
+    'u14': ['Pickleball,Padel,Futsal', 'Pemain senior, suka sharing tips posisi dan pola serangan.'],
+    'u15': ['Pickleball,Basket', 'Baru gabung klub. Pengin kenal banyak teman main di Jakarta Selatan.'],
+  };
 
   static Future<void> _dropSchema(Database d) async {
     final rows = await d.query('sqlite_master', columns: ['name'], where: "type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'");
@@ -91,6 +137,7 @@ class AppDb {
         phone TEXT DEFAULT '',
         created_at TEXT NOT NULL
       )''');
+    b.execute(_registrationsSql);
     b.execute('CREATE TABLE app_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
     b.execute('''
       CREATE TABLE clubs (
@@ -105,7 +152,8 @@ class AppDb {
     b.execute('''
       CREATE TABLE players (
         id TEXT PRIMARY KEY, name TEXT NOT NULL,
-        level TEXT NOT NULL, team TEXT
+        level TEXT NOT NULL, team TEXT,
+        sports TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT ''
       )''');
     b.execute('''
       CREATE TABLE meets (
@@ -210,7 +258,7 @@ class AppDb {
     });
 
     b.insert('app_meta', {'k': 'onboarded', 'v': '0'});
-    b.insert('app_meta', {'k': 'seed_version', 'v': '3'});
+    b.insert('app_meta', {'k': 'seed_version', 'v': '4'});
 
     b.insert('clubs', {
       'id': 'c-usc',
@@ -241,13 +289,15 @@ class AppDb {
       ['Esther Howard', 'Advanced'],
       ['Gladys Wijaya', 'Beginner'],
     ];
-    const teams = ['Red', 'Blue', 'Yellow', 'Green'];
+    const teams = ['Merah', 'Biru', 'Kuning', 'Hijau'];
     for (var i = 0; i < names.length; i++) {
       b.insert('players', {
         'id': 'u$i',
         'name': names[i][0],
         'level': names[i][1],
         'team': teams[i ~/ 4],
+        'sports': _playerProfiles['u$i']![0],
+        'bio': _playerProfiles['u$i']![1],
       });
     }
     b.insert('club_members', {'club_id': 'c-usc', 'user_id': 'u0'});

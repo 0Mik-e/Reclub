@@ -102,7 +102,7 @@ class _ClubPageState extends State<ClubPage> {
                     bg: Colors.white.withValues(alpha: 0.22),
                     fg: Colors.white,
                     border: false,
-                    onTap: () => toast(context, 'Link klub disalin', icon: Icons.link_rounded),
+                    onTap: () => toast(context, 'Tautan disalin', icon: Icons.link_rounded),
                   ),
                   const SizedBox(width: 8),
                   CircleIconButton(
@@ -369,7 +369,7 @@ class _ClubPageState extends State<ClubPage> {
                     ),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () => toast(context, 'Link postingan disalin', icon: Icons.link_rounded),
+                      onTap: () => toast(context, 'Tautan disalin', icon: Icons.link_rounded),
                       child: const Icon(Icons.ios_share_rounded, size: 17, color: AppColors.muted),
                     ),
                   ],
@@ -662,7 +662,7 @@ class _ClubPageState extends State<ClubPage> {
             title: const Text('Undang teman', style: T.bodyStrong),
             onTap: () {
               Navigator.pop(context);
-              toast(context, 'Link undangan disalin', icon: Icons.link_rounded);
+              toast(context, 'Tautan disalin', icon: Icons.link_rounded);
             },
           ),
           ListTile(

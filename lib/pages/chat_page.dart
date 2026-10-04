@@ -255,19 +255,16 @@ class _ChatPageState extends State<ChatPage> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           children: [
-            for (final p in appState.members.where((p) => p.name != appState.me?.name))
+            for (final p in appState.members.where((p) => !appState.isSelf(p)))
               ListTile(
                 leading: Avatar(label: p.name, size: 38),
                 title: Text(p.name, style: T.title),
                 subtitle: Text(p.level, style: T.small),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  final t = appState.threads.firstWhere(
-                    (t) => t.name == p.name,
-                    orElse: () => appState.threads.last,
-                  );
-                  appState.openThread(t.id);
-                  setState(() => _open = t.id);
+                  final id = await appState.openDirectThread(p);
+                  if (id == null || !mounted) return;
+                  setState(() => _open = id);
                 },
               ),
           ],
