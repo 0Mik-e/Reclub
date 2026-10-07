@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'models.dart';
-
-/// Data statis kompetisi VFFL (Season 3, 4, 5) dan helper klasemen.
-///
-/// Season 4 (yang sedang berlangsung) disimpan di SQLite lewat `AppState`
-/// supaya skornya bisa diedit. Season 3 (selesai) dan Season 5 (belum mulai)
-/// bersifat statis sehingga datanya ada di file ini.
+import 'dart:math';
 
 enum SeasonStatus { upcoming, live, ended }
 
@@ -42,22 +37,16 @@ class SeasonMeta {
   final String about;
   final String schedule;
   final String venue;
-
-  /// Biaya pendaftaran per tim dalam rupiah.
   final int feeAmount;
   final String prize;
   final List<String> rules;
 
-  /// Diskusi yang diarsipkan (penulis, isi). Hanya terisi untuk musim selesai.
+  /// Diskusi yang diarsipkan (penulis, isi). Hanya terisi untuk musim selesai dan MVP penghargaan lain
   final List<(String, String)> archive;
-
-  /// MVP & penghargaan lain. Hanya terisi untuk musim selesai.
   final List<SeasonAward> awards;
 
   String get feeLabel => rupiah(feeAmount);
 }
-
-/// Format angka rupiah dengan pemisah ribuan titik, mis. `Rp1.600.000`.
 String rupiah(int amount) {
   final digits = amount.abs().toString();
   final buf = StringBuffer();
@@ -68,11 +57,6 @@ String rupiah(int amount) {
   return '${amount < 0 ? '-' : ''}Rp$buf';
 }
 
-/// Menghitung klasemen satu pool.
-///
-/// Setiap baris berisi `name`, `code`, `w` (menang), `l` (kalah), `diff`
-/// (selisih skor) dan `pts` (3 poin per kemenangan). Urutan: poin, selisih
-/// skor, lalu nama.
 List<Map<String, dynamic>> poolTableOf(
   List<CompTeam> teams,
   List<PoolMatch> matches,
@@ -113,6 +97,8 @@ List<Map<String, dynamic>> poolTableOf(
 }
 
 abstract final class Vffl {
+  static final int joinedCount = 12 + Random().nextInt(17);
+  
   static SeasonMeta meta(int season) => switch (season) {
         3 => _s3,
         5 => _s5,
@@ -229,7 +215,6 @@ abstract final class Vffl {
     ),
   ];
 
-  /// Juara Season 3, diambil dari pertandingan FINALS.
   static String get s3Champion {
     final f = s3Bracket.firstWhere((b) => b.stage == 'FINALS');
     return f.aWins ? f.teamA : f.teamB;

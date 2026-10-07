@@ -21,7 +21,6 @@ class _CompetePageState extends State<CompetePage> {
   String _pool = 'A';
   int _shownSeason = 4;
 
-  // ------------------------------------------------------ data per musim
   int get _season => appState.competeSeason;
   SeasonMeta get _meta => Vffl.meta(_season);
   bool get _isLive => _meta.status == SeasonStatus.live;
@@ -49,7 +48,6 @@ class _CompetePageState extends State<CompetePage> {
       };
   List<Map<String, dynamic>> _poolTable(String p) => poolTableOf(_teams, _poolMatches, p);
 
-  /// Ganti musim -> kembalikan tab/filter ke posisi awal musim itu.
   void _syncSeason() {
     if (_shownSeason == _season) return;
     _shownSeason = _season;
@@ -108,7 +106,6 @@ class _CompetePageState extends State<CompetePage> {
     );
   }
 
-  // ------------------------------------------------------------------- hero
   Widget _hero(BuildContext context) {
     final m = _meta;
     final (tagText, tagBg, tagFg) = switch (m.status) {
@@ -129,7 +126,7 @@ class _CompetePageState extends State<CompetePage> {
     final subtitle = switch (m.status) {
       SeasonStatus.live => 'Playoffs · $teams tim · ${teams * 4} pemain',
       SeasonStatus.ended => 'Selesai · $teams tim · ${teams * 4} pemain',
-      SeasonStatus.upcoming => '${m.city} · pendaftaran tim dibuka',
+      SeasonStatus.upcoming => '${m.city} · ${Vffl.joinedCount} tim telah bergabung',
     };
     final reg = appState.registrationFor(_season);
 
