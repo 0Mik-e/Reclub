@@ -15,9 +15,7 @@ const _terms = [
   'Jadwal dan venue dapat berubah dengan pemberitahuan sebelumnya.',
 ];
 
-// ---------------------------------------------------------------------------
-// Langkah 1: nama tim, anggota tim, syarat & ketentuan
-// ---------------------------------------------------------------------------
+// Mengisi nama tim, anggota tim, syarat & ketentuan
 class VfflRegisterPage extends StatefulWidget {
   const VfflRegisterPage({super.key, required this.season});
   final int season;
@@ -89,7 +87,6 @@ class _VfflRegisterPageState extends State<VfflRegisterPage> {
     );
   }
 
-  /// Memilih 3 anggota dari daftar teman (halaman Sosial).
   Future<void> _pickMates() async {
     final candidates = appState.friends.where((p) => !appState.isSelf(p)).toList();
     final picked = List<Player>.from(_mates);
@@ -419,9 +416,6 @@ class _VfflRegisterPageState extends State<VfflRegisterPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Langkah 2: metode pembayaran (placeholder) -> Selesai = otomatis bergabung
-// ---------------------------------------------------------------------------
 class VfflPaymentPage extends StatefulWidget {
   const VfflPaymentPage({
     super.key,
@@ -438,7 +432,7 @@ class VfflPaymentPage extends StatefulWidget {
 }
 
 class _VfflPaymentPageState extends State<VfflPaymentPage> {
-  String? _method; // 'Google Play' | 'QRIS'
+  String? _method; // 'Google Play' | 'QRIS' | 'Kartu Debit/Kredit'
   bool _busy = false;
 
   SeasonMeta get _meta => Vffl.meta(widget.season);
@@ -460,7 +454,7 @@ class _VfflPaymentPageState extends State<VfflPaymentPage> {
       toast(context, err, icon: Icons.error_outline_rounded);
       return;
     }
-    // Kembali ke halaman utama (tab Compete, VFFL Season 5).
+
     Navigator.of(context).popUntil((r) => r.isFirst);
     if (rootContext.mounted) {
       toast(rootContext, 'Tim ${widget.teamName} resmi bergabung di ${_meta.title}',
@@ -514,6 +508,8 @@ class _VfflPaymentPageState extends State<VfflPaymentPage> {
                 _methodTile('Google Play', 'Bayar lewat akun Google Play', Icons.shop_2_rounded),
                 const SizedBox(height: 10),
                 _methodTile('QRIS', 'Scan dari e-wallet atau mobile banking', Icons.qr_code_2_rounded),
+                const SizedBox(height: 10),
+                _methodTile('Kartu Debit/Kredit', 'Visa, Mastercard, JCB', Icons.credit_card_rounded),
                 const SizedBox(height: 14),
                 if (_method == 'QRIS')
                   SectionCard(
@@ -606,7 +602,6 @@ class _VfflPaymentPageState extends State<VfflPaymentPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
 class _Header extends StatelessWidget {
   const _Header({required this.title, required this.caption, required this.detail});
   final String title;

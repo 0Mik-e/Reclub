@@ -90,7 +90,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  // ------------------------------------------------------------------ header
   Widget _header(BuildContext context, AppState s) {
     return Container(
       color: Colors.white,
@@ -211,7 +210,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  // ------------------------------------------------------------------ meets
   Widget _meetsTab(BuildContext context, AppState s) {
     final meets = s.visibleMeets;
     final groups = <String, List<Meet>>{};
@@ -446,7 +444,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
         _ => AppColors.greenSoft,
       };
 
-  // ------------------------------------------------------------------ clubs
   Widget _clubsTab(BuildContext context) {
     final q = appState.query.trim().toLowerCase();
     final list = AppState.clubs
@@ -509,7 +506,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  // ------------------------------------------------------------------ comps
   Widget _compsTab(BuildContext context) {
     final pools = ['A', 'B'];
     return ListView(
@@ -610,7 +606,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           Expanded(child: StatTile(value: Vffl.s3Champion, label: 'Juara', color: AppColors.muted)),
         ];
       case 5:
-        subtitle = '${m.city} · pendaftaran dibuka';
+        subtitle = '${m.city} · ${Vffl.joinedCount} tim sudah bergabung';
         stats = [
           Expanded(child: StatTile(value: m.city, label: 'Lokasi')),
           Expanded(child: StatTile(value: m.feeLabel, label: 'Biaya tim')),
@@ -686,7 +682,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  // ----------------------------------------------------------------- venues
   Widget _venuesTab(BuildContext context) {
     final q = appState.query.trim().toLowerCase();
     final list = AppState.venues
@@ -782,7 +777,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  // ----------------------------------------------------------------- people
   Widget _peopleTab(BuildContext context, AppState s) {
     final q = s.query.trim().toLowerCase();
     final list = s.friends.where((p) => q.isEmpty || p.name.toLowerCase().contains(q)).toList();
@@ -895,7 +889,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
     );
   }
 
-  // ---------------------------------------------------------------- sheets
   void _pickCity(BuildContext context, AppState s) {
     showAppSheet(
       context,

@@ -23,11 +23,8 @@ class AppState extends ChangeNotifier {
   /// Tab aktif di bottom navigation (0 Discover, 1 Klub, 2 Meet, 3 Compete, 4 Chat).
   int shellIndex = 0;
 
-  /// Musim VFFL yang sedang dibuka di halaman Compete (3, 4, atau 5).
   int competeSeason = 4;
 
-  /// Lama animasi loading saat masuk/daftar. `null` = acak 3-5 detik.
-  /// Tes mengisinya dengan `Duration.zero`.
   Duration? authDelayOverride;
   final Random _rng = Random();
 

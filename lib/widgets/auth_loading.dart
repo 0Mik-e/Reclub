@@ -23,7 +23,7 @@ class AuthLoadingOverlay extends StatelessWidget {
               const ReclubMark(size: 84),
               const SizedBox(height: 30),
               LoadingAnimationWidget.progressiveDots(
-                color: AppColors.green,
+                color: AppColors.yellow,
                 size: 56,
               ),
               const SizedBox(height: 16),

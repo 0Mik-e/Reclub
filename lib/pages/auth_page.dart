@@ -153,7 +153,7 @@ class _AuthPageState extends State<AuthPage> {
       fit: StackFit.expand,
       children: [
         _form(context),
-        // Animasi loading selama proses masuk / daftar / tamu (3-5 detik).
+        // Animation loading randomize 3-5 seconds
         if (_busy) const Positioned.fill(child: AuthLoadingOverlay()),
       ],
     );

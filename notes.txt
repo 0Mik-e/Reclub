@@ -1,0 +1,5 @@
+// Pembagian tugas yang telah dikerjakan tiap anggota kelompok
+kim = page login & chat
+michael = page compete & discover
+vicky = page meet
+raykhel = page club
